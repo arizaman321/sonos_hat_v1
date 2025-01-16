@@ -4,8 +4,9 @@
 
 #from sonos_hat_v1.configure_gui import run_gui
 import sys
-from configure_gui import run_gui
+from configure_gui import display_gui
 if __name__ == "__main__":
     #print(sys.path)
 
-    run_gui()
+    display_gui()
+    

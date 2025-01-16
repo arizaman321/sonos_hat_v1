@@ -1,0 +1,86 @@
+[
+    {
+        "name": "Office Ray",
+        "speakers": [
+            {
+                "name": "Office Ray",
+                "ip_address": "192.168.10.52",
+                "uid": "RINCON_F0F6C1FA452301400",
+                "volume": 25,
+                "is_coordinator": true,
+                "group_members": [
+                    "Office Ray"
+                ],
+                "knob": 1,
+                "room": null,
+                "section": 1
+            }
+        ],
+        "clk_pin": 1,
+        "dt_pin": 1,
+        "sw_pin": 1
+    },
+    {
+        "name": "Beam Living Room",
+        "speakers": [
+            {
+                "name": "Beam Living Room",
+                "ip_address": "192.168.10.50",
+                "uid": "RINCON_38420BF9662801400",
+                "volume": 28,
+                "is_coordinator": true,
+                "group_members": [
+                    "Beam Living Room"
+                ],
+                "knob": 1,
+                "room": null,
+                "section": 1
+            }
+        ],
+        "clk_pin": 1,
+        "dt_pin": 1,
+        "sw_pin": 1
+    },
+    {
+        "name": "Living Room 2",
+        "speakers": [
+            {
+                "name": "Living Room 2",
+                "ip_address": "192.168.10.53",
+                "uid": "RINCON_F0F6C1ABE95C01400",
+                "volume": 27,
+                "is_coordinator": true,
+                "group_members": [
+                    "Living Room 2"
+                ],
+                "knob": 1,
+                "room": null,
+                "section": 1
+            }
+        ],
+        "clk_pin": 1,
+        "dt_pin": 1,
+        "sw_pin": 1
+    },
+    {
+        "name": "Main Bedroom Beam",
+        "speakers": [
+            {
+                "name": "Main Bedroom Beam",
+                "ip_address": "192.168.10.51",
+                "uid": "RINCON_542A1BD0885601400",
+                "volume": 15,
+                "is_coordinator": true,
+                "group_members": [
+                    "Main Bedroom Beam"
+                ],
+                "knob": 1,
+                "room": null,
+                "section": 1
+            }
+        ],
+        "clk_pin": 1,
+        "dt_pin": 1,
+        "sw_pin": 1
+    }
+]

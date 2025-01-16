@@ -1,0 +1,86 @@
+[
+    {
+        "name": "Beam Living Room",
+        "ip_address": "192.168.10.50",
+        "uid": "RINCON_38420BF9662801400",
+        "volume": 28,
+        "is_coordinator": true,
+        "group_members": [
+            "Beam Living Room",
+            "Living Room 2"
+        ],
+        "clk_pin": null,
+        "dt_pin": null,
+        "sw_pin": null,
+        "knob": null,
+        "room": null,
+        "section": null
+    },
+    {
+        "name": "Living Room 2",
+        "ip_address": "192.168.10.53",
+        "uid": "RINCON_F0F6C1ABE95C01400",
+        "volume": 27,
+        "is_coordinator": false,
+        "group_members": [
+            "Beam Living Room",
+            "Living Room 2"
+        ],
+        "clk_pin": null,
+        "dt_pin": null,
+        "sw_pin": null,
+        "knob": null,
+        "room": null,
+        "section": null
+    },
+    {
+        "name": "Office Ray",
+        "ip_address": "192.168.10.52",
+        "uid": "RINCON_F0F6C1FA452301400",
+        "volume": 24,
+        "is_coordinator": true,
+        "group_members": [
+            "Office Ray"
+        ],
+        "clk_pin": null,
+        "dt_pin": null,
+        "sw_pin": null,
+        "knob": null,
+        "room": null,
+        "section": null
+    },
+    {
+        "name": "Roam 2",
+        "ip_address": "192.168.10.74",
+        "uid": "RINCON_C43875C6F9E001400",
+        "volume": 21,
+        "is_coordinator": false,
+        "group_members": [
+            "Roam 2",
+            "Main Bedroom Beam"
+        ],
+        "clk_pin": null,
+        "dt_pin": null,
+        "sw_pin": null,
+        "knob": null,
+        "room": null,
+        "section": null
+    },
+    {
+        "name": "Main Bedroom Beam",
+        "ip_address": "192.168.10.51",
+        "uid": "RINCON_542A1BD0885601400",
+        "volume": 14,
+        "is_coordinator": true,
+        "group_members": [
+            "Roam 2",
+            "Main Bedroom Beam"
+        ],
+        "clk_pin": null,
+        "dt_pin": null,
+        "sw_pin": null,
+        "knob": null,
+        "room": null,
+        "section": null
+    }
+]
