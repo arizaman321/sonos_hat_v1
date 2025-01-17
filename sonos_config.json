@@ -4,20 +4,20 @@
             "ip": "192.168.10.51",
             "coordinator": "Main Bedroom Beam"
         },
+        "Living Room 2": {
+            "ip": "192.168.10.53",
+            "coordinator": "Beam Living Room"
+        },
         "Office Ray": {
             "ip": "192.168.10.52",
             "coordinator": "Office Ray"
-        },
-        "Beam Living Room": {
-            "ip": "192.168.10.50",
-            "coordinator": "Beam Living Room"
         },
         "Roam 2": {
             "ip": "192.168.10.74",
             "coordinator": "Main Bedroom Beam"
         },
-        "Living Room 2": {
-            "ip": "192.168.10.53",
+        "Beam Living Room": {
+            "ip": "192.168.10.50",
             "coordinator": "Beam Living Room"
         }
     },

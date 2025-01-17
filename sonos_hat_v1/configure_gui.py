@@ -1,201 +1,288 @@
 import json
-import soco
+import os
+from soco.discovery import discover
 import PySimpleGUI as sg
+from soco import SoCo
 
-class Speaker:
-    def __init__(self, name, ip_address, uid, volume, is_coordinator, group_members, knob=None, room=None, section=None):
-        self.name = name
-        self.ip_address = ip_address
-        self.uid = uid
-        self.volume = volume
-        self.is_coordinator = is_coordinator
-        self.group_members = group_members
-        self.knob = knob
-        self.room = room
-        self.section = section
+# File to save the speaker configuration
+CONFIG_FILE = "sonos_config.json"
 
-    def to_dict(self):
-        return {
-            "name": self.name,
-            "ip_address": self.ip_address,
-            "uid": self.uid,
-            "volume": self.volume,
-            "is_coordinator": self.is_coordinator,
-            "group_members": self.group_members,
-            "knob": self.knob,
-            "room": self.room,
-            "section": self.section
-        }
+SMART_CONFIG_DONE = False
 
-    @staticmethod
-    def from_dict(data):
-        return Speaker(
-            name=data["name"],
-            ip_address=data["ip_address"],
-            uid=data["uid"],
-            volume=data["volume"],
-            is_coordinator=data["is_coordinator"],
-            group_members=data.get("group_members", []),
-            knob=data.get("knob"),
-            room=data.get("room"),
-            section=data.get("section")
-        )
+def discover_speakers():
+    """Discover all Sonos speakers on the network."""
+    speakers = discover()
+    if speakers:
+        return {speaker.player_name: {"ip": speaker.ip_address, "coordinator": speaker.group.coordinator.player_name} for speaker in speakers}
+    return {}
 
-    def __repr__(self):
-        return (f"Speaker(name={self.name}, ip_address={self.ip_address}, uid={self.uid}, "
-                f"volume={self.volume}, is_coordinator={self.is_coordinator}, "
-                f"group_members={self.group_members}, knob={self.knob}, room={self.room}, section={self.section})")
+def load_config():
+    """Load speaker configuration from JSON file."""
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r") as file:
+            return json.load(file)
+    return {}
 
-class Room:
-    def __init__(self, name, speakers, clk_pin=None, dt_pin=None, sw_pin=None):
-        self.name = name
-        self.speakers = speakers
-        self.clk_pin = clk_pin
-        self.dt_pin = dt_pin
-        self.sw_pin = sw_pin
+def save_config(config):
+    """Save speaker configuration to JSON file."""
+    with open(CONFIG_FILE, "w") as file:
+        json.dump(config, file, indent=4)
 
-    def to_dict(self):
-        return {
-            "name": self.name,
-            "speakers": [speaker.to_dict() for speaker in self.speakers],
-            "clk_pin": self.clk_pin,
-            "dt_pin": self.dt_pin,
-            "sw_pin": self.sw_pin
-        }
+def initialize_config():
+    """Initialize the configuration with discovered speakers and default assignments."""
+    speakers = discover_speakers()
+    room_encoders = {f"Room Encoder {i+1}": {} for i in range(4)}
 
-    @staticmethod
-    def from_dict(data):
-        return Room(
-            name=data["name"],
-            speakers=[Speaker.from_dict(s) for s in data["speakers"]],
-            clk_pin=data.get("clk_pin"),
-            dt_pin=data.get("dt_pin"),
-            sw_pin=data.get("sw_pin")
-        )
+    if speakers:
+        grouped_speakers = {name: info for name, info in speakers.items()}
+        pending_speakers = list(grouped_speakers.keys())
 
-    def __repr__(self):
-        return (f"Room(name={self.name}, speakers={self.speakers}, clk_pin={self.clk_pin}, "
-                f"dt_pin={self.dt_pin}, sw_pin={self.sw_pin})")
+        # Assign coordinators and their groups first
+        while pending_speakers:
+            for speaker in list(pending_speakers):
+                coordinator = grouped_speakers[speaker]["coordinator"]
 
-# Function to discover and load speakers
-def discover_and_load_speakers():
-    print("Discovering Sonos devices...")
-    devices = soco.discover()
+                if coordinator in room_encoders["Room Encoder 1"] or coordinator in room_encoders["Room Encoder 2"] or \
+                   coordinator in room_encoders["Room Encoder 3"]:
+                    # Coordinator is already assigned, place this speaker in the same room
+                    for room in room_encoders:
+                        if coordinator in room_encoders[room]:
+                            speaker_encoder = len(room_encoders[room]) + 1
+                            room_encoders[room][speaker] = {
+                                "Speaker Encoder": min(speaker_encoder, 4),
+                                "Zone": "ANY",
+                                "IP": grouped_speakers[speaker]["ip"]
+                            }
+                            pending_speakers.remove(speaker)
+                            break
+                elif coordinator == speaker:
+                    # Assign the coordinator to a room encoder
+                    for room in room_encoders:
+                        if not room_encoders[room]:
+                            room_encoders[room][coordinator] = {
+                                "Speaker Encoder": 1,
+                                "Zone": "CENTER",
+                                "IP": grouped_speakers[coordinator]["ip"]
+                            }
+                            pending_speakers.remove(speaker)
+                            break
 
-    if not devices:
-        print("No Sonos devices found on the network.")
-        return []
+        # Place remaining speakers without their coordinators in Room Encoder 4
+        for speaker in pending_speakers:
+            room_encoders["Room Encoder 4"][speaker] = {
+                "Speaker Encoder": len(room_encoders["Room Encoder 4"]) + 1,
+                "Zone": "ANY",
+                "IP": grouped_speakers[speaker]["ip"]
+            }
 
-    speakers = []
-    for device in devices:
-        # Get group members
-        group = device.group
-        group_members = [member.player_name for member in group.members] if group else []
+    # Sort speakers in each room encoder by their encoder number
+    for room in room_encoders:
+        room_encoders[room] = dict(sorted(room_encoders[room].items(), key=lambda x: x[1]["Speaker Encoder"]))
 
-        speaker = Speaker(
-            name=device.player_name,
-            ip_address=device.ip_address,
-            uid=device.uid,
-            volume=device.volume,
-            is_coordinator=device.is_coordinator,
-            group_members=group_members
-        )
+    return {"speakers": speakers, "room_encoders": room_encoders}
 
-        speakers.append(speaker)
+def assign_zones(room_encoders):
+    """Assign zones based on speaker names and group members."""
+    for room, speakers in room_encoders.items():
+        coordinator = next((speaker for speaker, props in speakers.items() if props["Speaker Encoder"] == 1), None)
+        if not coordinator:
+            continue
 
-    return speakers
+        for speaker, properties in speakers.items():
+            name_lower = speaker.lower()
+            if speaker == coordinator:
+                continue  # Coordinator already has a zone
+            elif "left" in name_lower:
+                properties["Zone"] = "LEFT"
+            elif "right" in name_lower:
+                properties["Zone"] = "RIGHT"
+            elif "center" in name_lower:
+                properties["Zone"] = "CENTER"
+            else:
+                properties["Zone"] = "ANY"
 
-# Save rooms to a JSON file
-def save_rooms_to_file(rooms, filename="rooms.json"):
-    with open(filename, "w") as file:
-        json.dump([room.to_dict() for room in rooms], file, indent=4)
+def control_speaker_volume(config_file, speaker_name, volume):
+    """Control the volume of a specific speaker using the JSON config file."""
+    if os.path.exists(config_file):
+        with open(config_file, "r") as file:
+            config = json.load(file)
 
-# Load rooms from a JSON file
-def load_rooms_from_file(filename="rooms.json"):
-    try:
-        with open(filename, "r") as file:
-            data = json.load(file)
-            return [Room.from_dict(room) for room in data]
-    except (FileNotFoundError, json.JSONDecodeError):
-        return []
+        speakers = config.get("speakers", {})
+        if speaker_name in speakers:
+            speaker_ip = speakers[speaker_name]["ip"]
+            speaker = SoCo(speaker_ip)
+            speaker.volume = volume
+            print(f"Set volume of {speaker_name} to {volume}.")
+        else:
+            print(f"Speaker '{speaker_name}' not found in configuration.")
+    else:
+        print(f"Configuration file '{config_file}' not found.")
 
-# Organize speakers into rooms
-def organize_into_rooms(speakers):
-    rooms = []
-    coordinators = {s.name: s for s in speakers if s.is_coordinator}
+def reset_and_initialize_config():
+    """Reset the configuration and perform smart initialization."""
+    config = initialize_config()
+    assign_zones(config["room_encoders"])
+    save_config(config)
+    return config
 
-    for idx, (name, coordinator) in enumerate(coordinators.items(), start=1):
-        room_name = name if idx <= 4 else f"Room-{idx}"
-        room_speakers = [s for s in speakers if coordinator.name in s.group_members or s.name == coordinator.name]
-        rooms.append(Room(name=room_name, speakers=room_speakers))
+def format_room_encoders_columns(room_encoders):
+    """Format the room encoder assignments for display in four columns."""
+    columns = [[] for _ in range(4)]
+    for i, (room, speakers) in enumerate(room_encoders.items()):
+        formatted = [f"{room}:"]
+        for speaker, attributes in speakers.items():
+            formatted.append(f"  {speaker}")
+            formatted.extend([f"    {key}: {value}" for key, value in attributes.items()])
+        columns[i] = "\n".join(formatted)
+    return columns
 
-    return rooms
+def run_gui():
+    global SMART_CONFIG_DONE
 
-# Display speakers in a GUI
-def display_gui():
-    sg.theme("DarkBlue3")
+    # Load or initialize configuration
+    if os.path.exists(CONFIG_FILE):
+        config = load_config()
+    else:
+        config = initialize_config()
+        assign_zones(config["room_encoders"])
+        save_config(config)
+        SMART_CONFIG_DONE = True
 
-    speakers = discover_and_load_speakers()
-    rooms = organize_into_rooms(speakers)
+    speakers = config.get("speakers", {})
+    room_encoders = config.get("room_encoders", {})
 
-    def create_pi_setup_tab():
-        room_frames = []
-        for room in rooms:
-            room_layout = [
-                [
-                    sg.Text("CLK Pin:"), sg.Combo([1, 4, 5, 6], default_value=room.clk_pin or 1, size=(5, 1), key=f"CLK_{room.name}"),
-                    sg.Text("DT Pin:"), sg.Combo([1, 4, 5, 6], default_value=room.dt_pin or 1, size=(5, 1), key=f"DT_{room.name}"),
-                    sg.Text("SW Pin:"), sg.Combo([1, 4, 5, 6], default_value=room.sw_pin or 1, size=(5, 1), key=f"SW_{room.name}")
-                ]
-            ]
+    # Format the room encoder columns
+    columns = format_room_encoders_columns(room_encoders)
 
-            for speaker in room.speakers:
-                speaker_layout = [
-                    sg.Text(speaker.name),
-                    sg.Text("Knob:"), sg.Combo([1, 2, 3, 4], default_value=speaker.knob or 1, size=(5, 1), key=f"KNOB_{speaker.uid}"),
-                    sg.Text("Section:"), sg.Combo([1, 2, 3, 4, 5], default_value=speaker.section or 1, size=(5, 1), key=f"SECTION_{speaker.uid}")
-                ]
-                room_layout.append([speaker_layout])
-
-            room_frames.append(
-                [sg.Frame(title=room.name, layout=room_layout)]
-            )
-        return room_frames
-
-    tab_layout = [
-        [sg.Column(create_pi_setup_tab(), scrollable=True, size=(900, 400))]
-    ]
-
+    # PySimpleGUI Layout
     layout = [
-        [sg.TabGroup([
-            [sg.Tab("PI SETUP", tab_layout)]
-        ])],
-        [sg.Button("Refresh", key="-REFRESH-"), sg.Button("Save", key="-SAVE-"), sg.Button("Exit")]
+        [sg.Text("Available Speakers:")],
+        [sg.Listbox(values=[
+            f"{name} ({info['ip']}, Coordinator: {info['coordinator']}){' - NEW' if name not in [speaker for room in room_encoders.values() for speaker in room] else ''}" 
+            for name, info in speakers.items()], size=(80, 15), key="-SPEAKER_LIST-", enable_events=True)],
+        [sg.Button("Refresh Speakers"), sg.Button("Reset Config")],
+        [sg.Text("Assign to Room Encoder:"), sg.Combo([f"Room Encoder {i+1}" for i in range(4)], key="-ROOM_ENCODER-", readonly=True)],
+        [sg.Text("Speaker Encoder (1-4):"), sg.Combo([1, 2, 3, 4], key="-SPEAKER_ENCODER-")],
+        [sg.Text("Zone (CENTER, LEFT, RIGHT, ANY):"), sg.Combo(["CENTER", "LEFT", "RIGHT", "ANY"], default_value="ANY", key="-ZONE-")],
+        [sg.Button("Assign"), sg.Button("Save"), sg.Button("Control Volume"), sg.Button("Exit")],
+        [sg.Text("Room Encoder Assignments:")],
+        [sg.Column([[sg.Multiline(default_text=columns[0], size=(20, 20), disabled=True, key="-OUTPUT1-")]], pad=(10, 0)),
+         sg.Column([[sg.Multiline(default_text=columns[1], size=(20, 20), disabled=True, key="-OUTPUT2-")]], pad=(10, 0)),
+         sg.Column([[sg.Multiline(default_text=columns[2], size=(20, 20), disabled=True, key="-OUTPUT3-")]], pad=(10, 0)),
+         sg.Column([[sg.Multiline(default_text=columns[3], size=(20, 20), disabled=True, key="-OUTPUT4-")]], pad=(10, 0))],
     ]
 
-    window = sg.Window("Sonos Speaker Manager", layout, resizable=True, size=(950, 600))
+    window = sg.Window("Sonos Speaker Grouping", layout, resizable=True)
 
     while True:
         event, values = window.read()
 
-        if event in (sg.WINDOW_CLOSED, "Exit"):
+        if event == sg.WINDOW_CLOSED or event == "Exit":
             break
 
-        if event == "-REFRESH-":
-            speakers = discover_and_load_speakers()
-            rooms = organize_into_rooms(speakers)
-            window.close()
-            display_gui()
-            return
+        if event == "Refresh Speakers":
+            speakers = discover_speakers()
+            config["speakers"] = speakers
+            window["-SPEAKER_LIST-"].update([
+                f"{name} ({info['ip']}, Coordinator: {info['coordinator']}){' - NEW' if name not in [speaker for room in room_encoders.values() for speaker in room] else ''}"
+                for name, info in speakers.items()
+            ])
 
-        if event == "-SAVE-":
-            for room in rooms:
-                room.clk_pin = values.get(f"CLK_{room.name}")
-                room.dt_pin = values.get(f"DT_{room.name}")
-                room.sw_pin = values.get(f"SW_{room.name}")
-                for speaker in room.speakers:
-                    speaker.knob = values.get(f"KNOB_{speaker.uid}")
-                    speaker.section = values.get(f"SECTION_{speaker.uid}")
-            save_rooms_to_file(rooms)
+        if event == "Reset Config":
+            config = reset_and_initialize_config()
+            speakers = config.get("speakers", {})
+            room_encoders = config.get("room_encoders", {})
+            columns = format_room_encoders_columns(room_encoders)
+            window["-SPEAKER_LIST-"].update([
+                f"{name} ({info['ip']}, Coordinator: {info['coordinator']}){' - NEW' if name not in [speaker for room in room_encoders.values() for speaker in room] else ''}"
+                for name, info in speakers.items()
+            ])
+            for i, col_key in enumerate(["-OUTPUT1-", "-OUTPUT2-", "-OUTPUT3-", "-OUTPUT4-"]):
+                window[col_key].update(columns[i])
+
+        if event == "Assign":
+            selected_speaker = values["-SPEAKER_LIST-"]
+            room_encoder = values["-ROOM_ENCODER-"]
+            zone = values["-ZONE-"]
+
+            if not selected_speaker or not room_encoder:
+                sg.popup("Please select a speaker and a room encoder.")
+                continue
+
+            # Extract speaker name from listbox entry
+            selected_speaker_name = selected_speaker[0].split(" (")[0]
+
+            # Ensure the speaker is only in one room encoder
+            for room in room_encoders.values():
+                if selected_speaker_name in room:
+                    del room[selected_speaker_name]
+
+            # Determine next available speaker encoder
+            current_encoders = room_encoders[room_encoder]
+            next_encoder = min(len(current_encoders) + 1, 4)
+
+            # Add speaker to the selected room encoder
+            if room_encoder not in room_encoders:
+                room_encoders[room_encoder] = {}
+
+            room_encoders[room_encoder][selected_speaker_name] = {
+                "Speaker Encoder": next_encoder,
+                "Zone": zone,
+                "IP": speakers[selected_speaker_name]["ip"]
+            }
+
+            # Reorder speaker encoders to be sequential
+            sorted_speakers = sorted(room_encoders[room_encoder].items(), key=lambda x: x[1]["Speaker Encoder"])
+            for i, (speaker, attributes) in enumerate(sorted_speakers, start=1):
+                attributes["Speaker Encoder"] = min(i, 4)
+
+            room_encoders[room_encoder] = dict(sorted_speakers)
+
+            # Update the output view
+            columns = format_room_encoders_columns(room_encoders)
+            for i, col_key in enumerate(["-OUTPUT1-", "-OUTPUT2-", "-OUTPUT3-", "-OUTPUT4-"]):
+                window[col_key].update(columns[i])
+            print(values['-SPEAKER_LIST-'])
+            if 'NEW' in values['-SPEAKER_LIST-'][0]:
+                speakers = discover_speakers()
+                config["speakers"] = speakers
+                window["-SPEAKER_LIST-"].update([
+                    f"{name} ({info['ip']}, Coordinator: {info['coordinator']}){' - NEW' if name not in [speaker for room in room_encoders.values() for speaker in room] else ''}"
+                    for name, info in speakers.items()
+                ])
+
+        if event == "-SPEAKER_LIST-":
+            selected_speaker = values["-SPEAKER_LIST-"]
+            if selected_speaker:
+                selected_speaker_name = selected_speaker[0].split(" (")[0]
+                for room_name, room in room_encoders.items():
+                    if selected_speaker_name in room:
+                        speaker_config = room[selected_speaker_name]
+                        window["-ROOM_ENCODER-"].update(value=room_name)
+                        window["-SPEAKER_ENCODER-"].update(value=speaker_config["Speaker Encoder"])
+                        window["-ZONE-"].update(value=speaker_config["Zone"])
+                        break
+
+        if event == "Save":
+            # Save room encoders to config
+            config["speakers"] = speakers
+            config["room_encoders"] = room_encoders
+            save_config(config)
+            sg.popup("Configuration saved.")
+
+        if event == "Control Volume":
+            selected_speaker = values["-SPEAKER_LIST-"]
+            if not selected_speaker:
+                sg.popup("Please select a speaker to control.")
+                continue
+
+            selected_speaker_name = selected_speaker[0].split(" (")[0]
+            volume = sg.popup_get_text("Enter volume (0-100):", "Control Volume")
+            if volume and volume.isdigit() and 0 <= int(volume) <= 100:
+                control_speaker_volume(CONFIG_FILE, selected_speaker_name, int(volume))
+            else:
+                sg.popup("Invalid volume value.")
+
 
     window.close()
+
