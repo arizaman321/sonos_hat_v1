@@ -129,6 +129,10 @@ def initialize_config():
                 "IP": grouped_speakers[speaker]["ip"]
             }
 
+    # Sort speakers in each room encoder by their encoder number
+    for room in room_encoders:
+        room_encoders[room] = dict(sorted(room_encoders[room].items(), key=lambda x: x[1]["Speaker Encoder"]))
+
     return {"speakers": speakers, "room_encoders": room_encoders}
 
 def assign_zones(room_encoders):
@@ -175,6 +179,17 @@ def reset_and_initialize_config():
     save_config(config)
     return config
 
+def format_room_encoders_columns(room_encoders):
+    """Format the room encoder assignments for display in four columns."""
+    columns = [[] for _ in range(4)]
+    for i, (room, speakers) in enumerate(room_encoders.items()):
+        formatted = [f"{room}:"]
+        for speaker, attributes in speakers.items():
+            formatted.append(f"  {speaker}")
+            formatted.extend([f"    {key}: {value}" for key, value in attributes.items()])
+        columns[i] = "\n".join(formatted)
+    return columns
+
 def main():
     global SMART_CONFIG_DONE
 
@@ -190,6 +205,9 @@ def main():
     speakers = config.get("speakers", {})
     room_encoders = config.get("room_encoders", {})
 
+    # Format the room encoder columns
+    columns = format_room_encoders_columns(room_encoders)
+
     # PySimpleGUI Layout
     layout = [
         [sg.Text("Available Speakers:")],
@@ -198,11 +216,14 @@ def main():
             for name, info in speakers.items()], size=(80, 15), key="-SPEAKER_LIST-", enable_events=True)],
         [sg.Button("Refresh Speakers"), sg.Button("Reset Config")],
         [sg.Text("Assign to Room Encoder:"), sg.Combo([f"Room Encoder {i+1}" for i in range(4)], key="-ROOM_ENCODER-", readonly=True)],
-        [sg.Text("Speaker Encoder (1-4):"), sg.Spin([1, 2, 3, 4], initial_value=1, key="-SPEAKER_ENCODER-")],
+        [sg.Text("Speaker Encoder (1-4):"), sg.Combo([1, 2, 3, 4], key="-SPEAKER_ENCODER-")],
         [sg.Text("Zone (CENTER, LEFT, RIGHT, ANY):"), sg.Combo(["CENTER", "LEFT", "RIGHT", "ANY"], default_value="ANY", key="-ZONE-")],
         [sg.Button("Assign"), sg.Button("Save"), sg.Button("Control Volume"), sg.Button("Exit")],
         [sg.Text("Room Encoder Assignments:")],
-        [sg.Multiline(default_text=json.dumps(room_encoders, indent=4), size=(100, 20), key="-OUTPUT-", disabled=True)],
+        [sg.Column([[sg.Multiline(default_text=columns[0], size=(20, 20), disabled=True, key="-OUTPUT1-")]], pad=(10, 0)),
+         sg.Column([[sg.Multiline(default_text=columns[1], size=(20, 20), disabled=True, key="-OUTPUT2-")]], pad=(10, 0)),
+         sg.Column([[sg.Multiline(default_text=columns[2], size=(20, 20), disabled=True, key="-OUTPUT3-")]], pad=(10, 0)),
+         sg.Column([[sg.Multiline(default_text=columns[3], size=(20, 20), disabled=True, key="-OUTPUT4-")]], pad=(10, 0))],
     ]
 
     window = sg.Window("Sonos Speaker Grouping", layout, resizable=True)
@@ -217,22 +238,25 @@ def main():
             speakers = discover_speakers()
             config["speakers"] = speakers
             window["-SPEAKER_LIST-"].update([
-                f"{name} ({info['ip']}, Coordinator: {info['coordinator']}){' - NEW' if name not in [speaker for room in room_encoders.values() for speaker in room] else ''}" 
-                for name, info in speakers.items()])
+                f"{name} ({info['ip']}, Coordinator: {info['coordinator']}){' - NEW' if name not in [speaker for room in room_encoders.values() for speaker in room] else ''}"
+                for name, info in speakers.items()
+            ])
 
         if event == "Reset Config":
             config = reset_and_initialize_config()
             speakers = config.get("speakers", {})
             room_encoders = config.get("room_encoders", {})
-            window["-OUTPUT-"].update(json.dumps(room_encoders, indent=4))
+            columns = format_room_encoders_columns(room_encoders)
             window["-SPEAKER_LIST-"].update([
-                f"{name} ({info['ip']}, Coordinator: {info['coordinator']}){' - NEW' if name not in [speaker for room in room_encoders.values() for speaker in room] else ''}" 
-                for name, info in speakers.items()])
+                f"{name} ({info['ip']}, Coordinator: {info['coordinator']}){' - NEW' if name not in [speaker for room in room_encoders.values() for speaker in room] else ''}"
+                for name, info in speakers.items()
+            ])
+            for i, col_key in enumerate(["-OUTPUT1-", "-OUTPUT2-", "-OUTPUT3-", "-OUTPUT4-"]):
+                window[col_key].update(columns[i])
 
         if event == "Assign":
             selected_speaker = values["-SPEAKER_LIST-"]
             room_encoder = values["-ROOM_ENCODER-"]
-            speaker_encoder = values["-SPEAKER_ENCODER-"]
             zone = values["-ZONE-"]
 
             if not selected_speaker or not room_encoder:
@@ -247,18 +271,39 @@ def main():
                 if selected_speaker_name in room:
                     del room[selected_speaker_name]
 
+            # Determine next available speaker encoder
+            current_encoders = room_encoders[room_encoder]
+            next_encoder = min(len(current_encoders) + 1, 4)
+
             # Add speaker to the selected room encoder
             if room_encoder not in room_encoders:
                 room_encoders[room_encoder] = {}
 
             room_encoders[room_encoder][selected_speaker_name] = {
-                "Speaker Encoder": speaker_encoder,
+                "Speaker Encoder": next_encoder,
                 "Zone": zone,
                 "IP": speakers[selected_speaker_name]["ip"]
             }
 
+            # Reorder speaker encoders to be sequential
+            sorted_speakers = sorted(room_encoders[room_encoder].items(), key=lambda x: x[1]["Speaker Encoder"])
+            for i, (speaker, attributes) in enumerate(sorted_speakers, start=1):
+                attributes["Speaker Encoder"] = min(i, 4)
+
+            room_encoders[room_encoder] = dict(sorted_speakers)
+
             # Update the output view
-            window["-OUTPUT-"].update(json.dumps(room_encoders, indent=4))
+            columns = format_room_encoders_columns(room_encoders)
+            for i, col_key in enumerate(["-OUTPUT1-", "-OUTPUT2-", "-OUTPUT3-", "-OUTPUT4-"]):
+                window[col_key].update(columns[i])
+            print(values['-SPEAKER_LIST-'])
+            if 'NEW' in values['-SPEAKER_LIST-'][0]:
+                speakers = discover_speakers()
+                config["speakers"] = speakers
+                window["-SPEAKER_LIST-"].update([
+                    f"{name} ({info['ip']}, Coordinator: {info['coordinator']}){' - NEW' if name not in [speaker for room in room_encoders.values() for speaker in room] else ''}"
+                    for name, info in speakers.items()
+                ])
 
         if event == "-SPEAKER_LIST-":
             selected_speaker = values["-SPEAKER_LIST-"]
@@ -292,7 +337,9 @@ def main():
             else:
                 sg.popup("Invalid volume value.")
 
+
     window.close()
 
 if __name__ == "__main__":
     main()
+
