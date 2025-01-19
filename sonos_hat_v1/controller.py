@@ -1,31 +1,47 @@
 import json
 import RPi.GPIO as GPIO
-from RPi_GPIO_Rotary import rotary
+#from RPi_GPIO_Rotary import rotary
+from rotary_dev import Rotary
 from functools import partial
 from soco import SoCo
 from soco.exceptions import SoCoException
+from gpiozero import RotaryEncoder, Button
 
-ENCODER1 = {
-    'CLK': 13,
-    'DT': 14,
-    'SW': 15
+
+#GPIO.setwarnings(False)
+VOL_ENCODER1 = {
+    'CLK': 0,
+    'DT': 9,
+    'SW': 10
 }
-ENCODER2 = {
-    'CLK': 13,
-    'DT': 14,
-    'SW': 15
+BASS_ENCODER2 = {
+    'CLK': 5,
+    'DT': 12,
+    'SW': 6
 }
-ENCODER3 = {
-    'CLK': 13,
-    'DT': 14,
-    'SW': 15
+TREBLE_ENCODER3 = {
+    'CLK': 21,
+    'DT': 26,
+    'SW': 11
 }
-ENCODER4 = {
-    'CLK': 13,
-    'DT': 14,
-    'SW': 15
+EXTRA_ENCODER4 = {
+    'CLK': 20,
+    'DT': 1,
+    'SW': 7
 }
-ENCODERS_CONFIG = [ENCODER1, ENCODER2, ENCODER3, ENCODER4]
+
+SPEAKER_SELECT_SW = 16
+ROOM_SELECT_SW = 18
+ALL_ROOMS_SW = 19
+SINGLE_ROOM_SW = 20
+SINGLE_SPK_SW = 21
+
+BUTTONS = [VOL_ENCODER1]
+
+GPIO.setmode(GPIO.BCM)
+#btn = Button(SPEAKER_SELECT_SW)
+btn = GPIO.setup(SPEAKER_SELECT_SW,GPIO.OUT,initial = GPIO.LOW)
+ENCODERS_CONFIG = [VOL_ENCODER1, BASS_ENCODER2, TREBLE_ENCODER3, EXTRA_ENCODER4]
 
 encoder_assignments = ['MISSING', 'MISSING', 'MISSING', 'MISSING']
 
@@ -33,7 +49,7 @@ ROOMS = ["LIV", "KIT", "BED", "OFF"]
 ZONES = ["CENTER", "LEFT", "RIGHT", "ANY"]
 MODES = ["all_rooms_mode", "single_room_mode", "single_speaker_mode"]
 SPEAKER_SELECT = 1
-current_room = ROOMS[3]
+current_room = ROOMS[1]
 # current_zone = ZONES[0]
 current_mode = MODES[2]
 
@@ -51,8 +67,9 @@ def initialize_encoders():
     encoders = []
     # Initialize (clk,dt,sw,ticks)
     for idx, encoder_name in enumerate(ENCODERS_CONFIG):
-        encoder = rotary.Rotary(
-            encoder_name['CLK'], encoder_name['DT'], encoder_name['SW'], 2)
+        encoder = Rotary(encoder_name['CLK'], encoder_name['DT'], encoder_name['SW'])
+        
+        # encoder = RotaryEncoder(27, 21)
         encoders.append(encoder)
 
     return encoders
@@ -66,6 +83,9 @@ def register_encoder_turn(encoders):
             decrement=partial(
                 STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'DOWN')
         )
+        
+        # encoder.when_rotated_clockwise = partial(STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'UP')
+        # encoder.when_rotated_counter_clockwise = partial(STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'DOWN')
         print(encoder)
 
 
