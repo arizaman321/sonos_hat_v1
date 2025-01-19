@@ -6,7 +6,7 @@ from functools import partial
 from soco import SoCo
 from soco.exceptions import SoCoException
 from gpiozero import RotaryEncoder, Button
-
+import itertools
 
 #GPIO.setwarnings(False)
 VOL_ENCODER1 = {
@@ -31,27 +31,32 @@ EXTRA_ENCODER4 = {
 }
 
 SPEAKER_SELECT_SW = 16
-ROOM_SELECT_SW = 18
-ALL_ROOMS_SW = 19
-SINGLE_ROOM_SW = 20
-SINGLE_SPK_SW = 21
+ROOM_SELECT_SW = 19
+ALL_ROOMS_SW = 23
+SINGLE_ROOM_SW = 13
+SINGLE_SPK_SW = 22
 
-BUTTONS = [VOL_ENCODER1]
+BUTTONS = [VOL_ENCODER1['SW'],BASS_ENCODER2['SW'],TREBLE_ENCODER3['SW'],EXTRA_ENCODER4['SW'],SPEAKER_SELECT_SW,ROOM_SELECT_SW,ALL_ROOMS_SW,SINGLE_ROOM_SW,SINGLE_SPK_SW]
 
 GPIO.setmode(GPIO.BCM)
 #btn = Button(SPEAKER_SELECT_SW)
-btn = GPIO.setup(SPEAKER_SELECT_SW,GPIO.OUT,initial = GPIO.LOW)
+
 ENCODERS_CONFIG = [VOL_ENCODER1, BASS_ENCODER2, TREBLE_ENCODER3, EXTRA_ENCODER4]
 
 encoder_assignments = ['MISSING', 'MISSING', 'MISSING', 'MISSING']
 
 ROOMS = ["LIV", "KIT", "BED", "OFF"]
+ROOMS_CYCLIC = itertools.cycle(ROOMS)
+
 ZONES = ["CENTER", "LEFT", "RIGHT", "ANY"]
+
 MODES = ["all_rooms_mode", "single_room_mode", "single_speaker_mode"]
 SPEAKER_SELECT = 1
-current_room = ROOMS[1]
+
+for i in range(1): 
+    current_room = next(ROOMS_CYCLIC) #ROOMS[1]
 # current_zone = ZONES[0]
-current_mode = MODES[2]
+current_mode = MODES[0]
 
 # Load the configuration file
 
@@ -67,30 +72,31 @@ def initialize_encoders():
     encoders = []
     # Initialize (clk,dt,sw,ticks)
     for idx, encoder_name in enumerate(ENCODERS_CONFIG):
-        encoder = Rotary(encoder_name['CLK'], encoder_name['DT'], encoder_name['SW'])
+        #encoder = Rotary(encoder_name['CLK'], encoder_name['DT'], encoder_name['SW'])
         
-        # encoder = RotaryEncoder(27, 21)
+        encoder = RotaryEncoder(encoder_name['CLK'],encoder_name['DT'])
         encoders.append(encoder)
 
     return encoders
 
 
-def register_encoder_turn(encoders):
+def register_encoder_turn():
+    global encoders
     for idx, encoder in enumerate(encoders):
-        encoder.register(
-            increment=partial(
-                STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'UP'),
-            decrement=partial(
-                STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'DOWN')
-        )
+        # encoder.register(
+        #     increment=partial(
+        #         STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'UP'),
+        #     decrement=partial(
+        #         STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'DOWN')
+        # )
         
-        # encoder.when_rotated_clockwise = partial(STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'UP')
-        # encoder.when_rotated_counter_clockwise = partial(STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'DOWN')
+        encoder.when_rotated_clockwise = partial(STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'UP')
+        encoder.when_rotated_counter_clockwise = partial(STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'DOWN')
         print(encoder)
 
 
-def assign_encoders_speakers(encoder_assignments):
-
+def assign_encoders_speakers():
+    global encoder_assignments
     if current_mode == 'all_rooms_mode':
         # print(config)
         for i in range(len(encoder_assignments)):
@@ -217,12 +223,43 @@ def change_treble(devices, direction="UP"):
                 continue
         # TODO add code that will search for missing device
 
+def button_callback(channel):
+    #print('hi')
+    if channel in [ALL_ROOMS_SW, SINGLE_SPK_SW, SINGLE_ROOM_SW]:
+       # print(current_mode)
+        change_mode(channel)
+
+def change_mode(channel):
+    global current_mode
+    if channel == ALL_ROOMS_SW:
+        current_mode = MODES[MODES.index('all_rooms_mode')]
+    elif channel == SINGLE_SPK_SW:
+        current_mode = MODES[MODES.index('single_speaker_mode')]
+    elif channel == SINGLE_ROOM_SW:
+        current_mode = MODES[MODES.index('single_room_mode')]
+    else:
+        current_mode = current_mode
+    update_encoders()
+    print('here')
+    #return current_mode
+
+def update_encoders():
+    assign_encoders_speakers()
+    register_encoder_turn()
 
 STATIC_TURN_FUNCTIONS = {
     'all_rooms_mode': [change_volume, change_volume, change_volume, change_volume],
     'single_room_mode': [change_volume, change_volume, change_volume, change_volume],
     'single_speaker_mode': [change_volume, change_bass, change_treble, change_volume]
 }
+buttons_dict = {}
+
+for button_pin in BUTTONS:
+    GPIO.setup(button_pin,GPIO.IN,pull_up_down=GPIO.PUD_DOWN)
+    GPIO.add_event_detect(button_pin,GPIO.RISING,callback=partial(button_callback))
+    # buttons_dict[button_pin] = Button(button_pin)
+    # buttons_dict[button_pin].when_pressed = button_callback
+
 
 if __name__ == "__main__":
 
@@ -230,14 +267,14 @@ if __name__ == "__main__":
     config = load_config(config_path)
 
     encoders = initialize_encoders()
-    assign_encoders_speakers(encoder_assignments)
-    register_encoder_turn(encoders)
-
-    change_volume(encoder_assignments[1], 'DOWN')
+    update_encoders()
+    #change_mode(current_mode,13)
+    #change_volume(encoder_assignments[1], 'DOWN')
 
     try:
         print("System is running. Press Ctrl+C to exit.")
         while True:
+            print(current_mode)
             pass
     except KeyboardInterrupt:
         print("Exiting...")
