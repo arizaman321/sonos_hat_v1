@@ -51,12 +51,14 @@ ROOMS_CYCLIC = itertools.cycle(ROOMS)
 ZONES = ["CENTER", "LEFT", "RIGHT", "ANY"]
 
 MODES = ["all_rooms_mode", "single_room_mode", "single_speaker_mode"]
+
+
 SPEAKER_SELECT = 1
 
 for i in range(1): 
     current_room = next(ROOMS_CYCLIC) #ROOMS[1]
 # current_zone = ZONES[0]
-current_mode = MODES[0]
+current_mode = MODES[2]
 
 # Load the configuration file
 
@@ -72,9 +74,9 @@ def initialize_encoders():
     encoders = []
     # Initialize (clk,dt,sw,ticks)
     for idx, encoder_name in enumerate(ENCODERS_CONFIG):
-        #encoder = Rotary(encoder_name['CLK'], encoder_name['DT'], encoder_name['SW'])
+        encoder = Rotary(encoder_name['CLK'], encoder_name['DT'], encoder_name['SW'])
         
-        encoder = RotaryEncoder(encoder_name['CLK'],encoder_name['DT'])
+        #encoder = RotaryEncoder(encoder_name['CLK'],encoder_name['DT'])
         encoders.append(encoder)
 
     return encoders
@@ -83,15 +85,15 @@ def initialize_encoders():
 def register_encoder_turn():
     global encoders
     for idx, encoder in enumerate(encoders):
-        # encoder.register(
-        #     increment=partial(
-        #         STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'UP'),
-        #     decrement=partial(
-        #         STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'DOWN')
-        # )
+        encoder.register(
+            increment=partial(
+                STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'UP'),
+            decrement=partial(
+                STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'DOWN')
+        )
         
-        encoder.when_rotated_clockwise = partial(STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'UP')
-        encoder.when_rotated_counter_clockwise = partial(STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'DOWN')
+        # encoder.when_rotated_clockwise = partial(STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'UP')
+        # encoder.when_rotated_counter_clockwise = partial(STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'DOWN')
         print(encoder)
 
 
@@ -137,13 +139,14 @@ def assign_encoders_speakers():
         encoder_speakers = config['room_encoders'][config_room_name]
         for speaker in encoder_speakers:
             encoder_speaker = encoder_speakers[speaker]
-            if encoder_speaker['Speaker Encoder'] == SPEAKER_SELECT:
+            if encoder_speaker['Speaker Encoder'] == SPEAKER_SELECT :#and SPEAKER_SELECT < len(list(encoder_speakers.keys())):
                 temp_speaker = get_speaker(encoder_speaker['IP'])
                 for i in range(len(['VOL', 'BASS', 'TREB'])):
                     if encoder_assignments[i][0] == 'MISSING':
                         encoder_assignments[i][0] = [temp_speaker]
                     else:
                         encoder_assignments[i].append([temp_speaker])
+                break
 
 
 def get_speaker(speaker_ip):
@@ -154,6 +157,7 @@ def get_speaker(speaker_ip):
 
         # Verify the connection
         if not speaker:
+            #TODO Try to find by player name
             print(f"Unable to connect to speaker with IP {speaker_ip}.")
             speaker = 'MISSING'
 
@@ -187,7 +191,9 @@ def get_speaker_group(speaker_ip):
         return 'MISSING'
 
 
-def change_volume(devices, direction="UP"):
+def change_volume(devices, direction="UP",single=False):
+    if single == True:
+        devices = [SoCo(devices[0])]
     for device in devices:
         if device != 'MISSING':
             try:
@@ -195,7 +201,8 @@ def change_volume(devices, direction="UP"):
                     device.volume += 5
                 elif direction == 'DOWN':
                     device.volume -= 5
-            except:
+            except SoCoException as e:
+                print(f"An error occurred: {e}")
                 continue
 
 
@@ -225,22 +232,47 @@ def change_treble(devices, direction="UP"):
 
 def button_callback(channel):
     #print('hi')
+    
     if channel in [ALL_ROOMS_SW, SINGLE_SPK_SW, SINGLE_ROOM_SW]:
        # print(current_mode)
         change_mode(channel)
+    elif channel == ROOM_SELECT_SW and current_mode not in ['all_rooms_mode']:
+        change_room()
+    elif channel == SPEAKER_SELECT_SW and current_mode in ['single_speaker_mode']:
+        change_speaker()
+        
+def change_speaker():
+    global SPEAKER_SELECT
+    SPEAKER_SELECT += 1
+    room_idx = ROOMS.index(current_room)
+    config_room_name = list(config['room_encoders'].keys())[room_idx]
+    encoder_speakers = config['room_encoders'][config_room_name]
+    #TODO - make speaker cyclic
+    if SPEAKER_SELECT > len(list(encoder_speakers.keys())) or SPEAKER_SELECT > 4:
+        SPEAKER_SELECT = 1
+    update_encoders()
+    print('herree')
+
+def change_room():
+    global current_room, SPEAKER_SELECT
+    SPEAKER_SELECT = 1
+    current_room = next(ROOMS_CYCLIC)
+    update_encoders()
 
 def change_mode(channel):
-    global current_mode
+    global current_mode, SPEAKER_SELECT
     if channel == ALL_ROOMS_SW:
         current_mode = MODES[MODES.index('all_rooms_mode')]
     elif channel == SINGLE_SPK_SW:
         current_mode = MODES[MODES.index('single_speaker_mode')]
     elif channel == SINGLE_ROOM_SW:
+        #change_volume(['192.168.10.52'],single=True)
         current_mode = MODES[MODES.index('single_room_mode')]
     else:
         current_mode = current_mode
+    SPEAKER_SELECT = 1
     update_encoders()
-    print('here')
+    #print('here')
     #return current_mode
 
 def update_encoders():
@@ -252,7 +284,8 @@ STATIC_TURN_FUNCTIONS = {
     'single_room_mode': [change_volume, change_volume, change_volume, change_volume],
     'single_speaker_mode': [change_volume, change_bass, change_treble, change_volume]
 }
-buttons_dict = {}
+
+# buttons_dict = {}
 
 for button_pin in BUTTONS:
     GPIO.setup(button_pin,GPIO.IN,pull_up_down=GPIO.PUD_DOWN)
@@ -268,13 +301,17 @@ if __name__ == "__main__":
 
     encoders = initialize_encoders()
     update_encoders()
+    # for i in range(10):
+    #     change_room()
+    #     print(current_room)
     #change_mode(current_mode,13)
     #change_volume(encoder_assignments[1], 'DOWN')
-
+    change_speaker()
+    change_speaker()
     try:
         print("System is running. Press Ctrl+C to exit.")
         while True:
-            print(current_mode)
+            #print(current_mode)
             pass
     except KeyboardInterrupt:
         print("Exiting...")
