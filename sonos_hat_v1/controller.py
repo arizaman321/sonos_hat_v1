@@ -7,7 +7,9 @@ from soco import SoCo
 from soco.exceptions import SoCoException
 #from gpiozero import RotaryEncoder, Button
 import itertools
-
+from time import sleep
+import signal
+import sys
 #GPIO.setwarnings(False)
 VOL_ENCODER1 = {
     'CLK': 0,
@@ -39,7 +41,7 @@ SINGLE_SPK_SW = 22
 BUTTONS = [VOL_ENCODER1['SW'],BASS_ENCODER2['SW'],TREBLE_ENCODER3['SW'],EXTRA_ENCODER4['SW'],SPEAKER_SELECT_SW,ROOM_SELECT_SW,ALL_ROOMS_SW,SINGLE_ROOM_SW,SINGLE_SPK_SW]
 
 MODE_LEDS = {
-    "all_rooms_mode" : 23,
+    "all_rooms_mode" : 24,
     "single_room_mode" : 8,
     "single_speaker_mode" : 25
 }
@@ -52,6 +54,13 @@ ROOM_LEDS = {
 }
 
 SPK_LEDS = [3,4,15,18]
+ALL_LED_PINS = []
+for pin in SPK_LEDS:
+    ALL_LED_PINS.append(pin)
+for pin in ROOM_LEDS:
+    ALL_LED_PINS.append(ROOM_LEDS[pin])
+for pin in MODE_LEDS:
+    ALL_LED_PINS.append(MODE_LEDS[pin])
 
 GPIO.setmode(GPIO.BCM)
 #btn = Button(SPEAKER_SELECT_SW)
@@ -109,7 +118,7 @@ def register_encoder_turn():
         
         # encoder.when_rotated_clockwise = partial(STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'UP')
         # encoder.when_rotated_counter_clockwise = partial(STATIC_TURN_FUNCTIONS[current_mode][idx], encoder_assignments[idx], 'DOWN')
-        print(encoder)
+        #print(encoder)
 
 
 def assign_encoders_speakers():
@@ -130,7 +139,7 @@ def assign_encoders_speakers():
                     encoder_assignments[encoder_idx][0] = [
                         get_speaker_group(encoder_speaker['IP'])]
 
-    if current_mode == 'single_room_mode':
+    elif current_mode == 'single_room_mode':
         for i in range(len(encoder_assignments)):
             encoder_assignments[i] = ['MISSING']
         room_idx = ROOMS.index(current_room)
@@ -146,7 +155,7 @@ def assign_encoders_speakers():
                 encoder_assignments[speaker_idx].append(
                     get_speaker(encoder_speaker['IP']))
 
-    if current_mode == 'single_speaker_mode':
+    elif current_mode == 'single_speaker_mode':
         for i in range(len(encoder_assignments)):
             encoder_assignments[i] = ['MISSING']
         room_idx = ROOMS.index(current_room)
@@ -162,7 +171,21 @@ def assign_encoders_speakers():
                     else:
                         encoder_assignments[i].append([temp_speaker])
                 break
-
+    
+    print(encoder_assignments)
+    # for i,encoder in enumerate(encoder_assignments):
+    #     for item in encoder:
+    #         for sub in item:
+    #             if item == 'MISSING':
+    #                 print(f'Encoder {i+1} - Player MISSING')
+    #             else:
+    #                 try:
+    #                     print(f'Encoder {i+1} - Player {sub.player_name}')
+    #                 except:
+    #                     try:
+    #                         print(f'Encoder {i+1} - Player {sub.label}')
+    #                     except:
+    #                         print(f'Encoder {i+1} - Player MISSING')
 
 def get_speaker(speaker_ip):
 
@@ -203,6 +226,9 @@ def get_speaker_group(speaker_ip):
 
     except SoCoException as e:
         print(f"An error occurred: {e}")
+        return 'MISSING'
+
+    except:
         return 'MISSING'
 
 
@@ -269,13 +295,15 @@ def change_speaker():
     if SPEAKER_SELECT > len(list(encoder_speakers.keys())) or SPEAKER_SELECT > 4:
         SPEAKER_SELECT = 1
     update_encoders()
-    print('herree')
+    update_LEDs()
+    #print('herree')
 
 def change_room():
     global current_room, SPEAKER_SELECT
     SPEAKER_SELECT = 1
     current_room = next(ROOMS_CYCLIC)
     update_encoders()
+    update_LEDs()
 
 def change_mode(channel):
     global current_mode, SPEAKER_SELECT
@@ -290,9 +318,33 @@ def change_mode(channel):
         current_mode = current_mode
     SPEAKER_SELECT = 1
     update_encoders()
+    update_LEDs()
     #print('here')
     #return current_mode
+
+def LED_on_off(dir = 'off'):
+    for pin in ALL_LED_PINS:
+        GPIO.output(pin,GPIO.LOW)
+        
+    for pin in ALL_LED_PINS:
+        if dir == 'on':
+            GPIO.output(pin,GPIO.HIGH)
+
+def LED_flash(repeat = 1, time = .5):
+    for i in range(repeat):
+        LED_on_off(dir = 'on')
+        sleep(time)
+        LED_on_off('off')
     
+def LED_cycle(time = .5):
+    for pin in ALL_LED_PINS:
+        GPIO.output(pin,GPIO.LOW)
+    for pin in ALL_LED_PINS:
+        GPIO.output(pin,GPIO.HIGH)
+        sleep(time)
+        GPIO.output(pin,GPIO.LOW)
+        
+
 def update_LEDs():
     
     mode_turn_on_pin = -1
@@ -329,13 +381,45 @@ def update_LEDs():
     for idx,pin in enumerate(speaker_turn_on_pins):
         if pin:
             GPIO.output(SPK_LEDS[idx], GPIO.HIGH)
-    print(speaker_turn_on_pins)
+    #print(speaker_turn_on_pins)
     
     
 
 def update_encoders():
     assign_encoders_speakers()
     register_encoder_turn()
+
+def startup_test():
+    # global current_mode, current_room, SPEAKER_SELECT
+    # temp_mode = current_mode
+    # temp_room = current_room
+    # temp_spk = SPEAKER_SELECT
+    try:
+        for mode in [23,22,13]:
+            change_mode(mode)
+            for room in ROOMS:
+                if mode != 23:
+                    change_room()
+                for i in range(1,5):
+                    if mode not in [23,13]:
+                        change_speaker()
+                        print(f'mode - {mode} / room - {room} / speaker - {i}') 
+                        sleep(.1)  
+        # current_mode = temp_mode
+        # current_room = temp_room
+        # SPEAKER_SELECT = temp_spk
+        return 1
+    except:
+        return 0
+
+def handle_exit(signum, frame):
+    """
+    This function is called when you press Ctrl+C or send a kill signal.
+    Cleans up GPIO and exits gracefully.
+    """
+    print("\nExiting program...")
+    GPIO.cleanup()
+    sys.exit(0)
 
 STATIC_TURN_FUNCTIONS = {
     'all_rooms_mode': [change_volume, change_volume, change_volume, change_volume],
@@ -376,16 +460,22 @@ if __name__ == "__main__":
     #change_mode(current_mode,13)
     #change_volume(encoder_assignments[1], 'DOWN')
     #change_speaker()
-    for i in range(1,8):
-        SPEAKER_SELECT = i
-        update_LEDs()
-    #change_speaker()
-    try:
-        print("System is running. Press Ctrl+C to exit.")
-        while True:
-            #print(current_mode)
-            pass
-    except KeyboardInterrupt:
-        print("Exiting...")
-    finally:
-        GPIO.cleanup()
+    
+    temp_mode = current_mode
+    temp_room = current_room
+    temp_spk = SPEAKER_SELECT   
+
+    initialize_sucess = startup_test()
+    current_mode = temp_mode
+    current_room = temp_room
+    SPEAKER_SELECT = temp_spk   
+    update_encoders()
+    update_LEDs()
+    
+    # Handle SIGINT (Ctrl+C) or SIGTERM to exit gracefully
+    signal.signal(signal.SIGINT, handle_exit)
+    signal.signal(signal.SIGTERM, handle_exit)
+    print("Press the button or Ctrl+C to exit.")
+    
+    # Instead of 'while True:', just pause and wait for signals (or GPIO events)
+    signal.pause()
