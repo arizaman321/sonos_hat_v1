@@ -5,7 +5,7 @@ from rotary_dev import Rotary
 from functools import partial
 from soco import SoCo
 from soco.exceptions import SoCoException
-from gpiozero import RotaryEncoder, Button
+#from gpiozero import RotaryEncoder, Button
 import itertools
 
 #GPIO.setwarnings(False)
@@ -37,6 +37,21 @@ SINGLE_ROOM_SW = 13
 SINGLE_SPK_SW = 22
 
 BUTTONS = [VOL_ENCODER1['SW'],BASS_ENCODER2['SW'],TREBLE_ENCODER3['SW'],EXTRA_ENCODER4['SW'],SPEAKER_SELECT_SW,ROOM_SELECT_SW,ALL_ROOMS_SW,SINGLE_ROOM_SW,SINGLE_SPK_SW]
+
+MODE_LEDS = {
+    "all_rooms_mode" : 23,
+    "single_room_mode" : 8,
+    "single_speaker_mode" : 25
+}
+
+ROOM_LEDS = {
+    "LIV": 2, 
+    "KIT": 14, 
+    "BED": 17, 
+    "OFF": 27
+}
+
+SPK_LEDS = [3,4,15,18]
 
 GPIO.setmode(GPIO.BCM)
 #btn = Button(SPEAKER_SELECT_SW)
@@ -206,7 +221,9 @@ def change_volume(devices, direction="UP",single=False):
                 continue
 
 
-def change_bass(devices, direction="UP"):
+def change_bass(devices, direction="UP",single=False):
+    if single == True:
+        devices = [SoCo(devices[0])]
     for device in devices:
         if device != 'MISSING':
             try:
@@ -214,7 +231,8 @@ def change_bass(devices, direction="UP"):
                     device.bass += 1
                 elif direction == 'DOWN':
                     device.bass -= 1
-            except:
+            except SoCoException as e:
+                print(f"An error occurred: {e}")
                 continue
 
 
@@ -274,6 +292,46 @@ def change_mode(channel):
     update_encoders()
     #print('here')
     #return current_mode
+    
+def update_LEDs():
+    
+    mode_turn_on_pin = -1
+    for mode in MODE_LEDS:
+        if current_mode == mode:
+            mode_turn_on_pin = MODE_LEDS[mode]
+        else:
+            off_pin = MODE_LEDS[mode]
+            GPIO.output(off_pin,GPIO.LOW)
+
+    
+    room_turn_on_pin = -1
+    for room in ROOM_LEDS:
+        if current_room == room and current_mode not in ['all_rooms_mode']:
+            room_turn_on_pin = ROOM_LEDS[room]
+        else:
+            off_pin = ROOM_LEDS[room]
+            GPIO.output(off_pin,GPIO.LOW)
+    
+    speaker_turn_on_pins = [-1,-1,-1,-1]
+    val = SPEAKER_SELECT - 1
+    if val > 3:
+        speaker_turn_on_pins[3] = 1
+    else:
+        speaker_turn_on_pins[val] = 1
+    for idx,pin in enumerate(speaker_turn_on_pins):
+        if pin == -1:
+            GPIO.output(SPK_LEDS[idx], GPIO.HIGH)    
+
+    if mode_turn_on_pin >= 0:
+        GPIO.output(mode_turn_on_pin, GPIO.HIGH)
+    if room_turn_on_pin >= 0:
+        GPIO.output(room_turn_on_pin, GPIO.HIGH)
+    for idx,pin in enumerate(speaker_turn_on_pins):
+        if pin:
+            GPIO.output(SPK_LEDS[idx], GPIO.HIGH)
+    print(speaker_turn_on_pins)
+    
+    
 
 def update_encoders():
     assign_encoders_speakers()
@@ -292,7 +350,18 @@ for button_pin in BUTTONS:
     GPIO.add_event_detect(button_pin,GPIO.RISING,callback=partial(button_callback))
     # buttons_dict[button_pin] = Button(button_pin)
     # buttons_dict[button_pin].when_pressed = button_callback
-
+    
+for LED in MODE_LEDS:
+    pin = MODE_LEDS[LED]
+    GPIO.setup(pin, GPIO.OUT)
+    GPIO.output(pin,GPIO.LOW)
+for LED in ROOM_LEDS:
+    pin = ROOM_LEDS[LED]
+    GPIO.setup(pin, GPIO.OUT)
+    GPIO.output(pin,GPIO.LOW)
+for LED_pin in SPK_LEDS:
+    GPIO.setup(LED_pin, GPIO.OUT)
+    GPIO.output(LED_pin,GPIO.LOW)   
 
 if __name__ == "__main__":
 
@@ -306,8 +375,11 @@ if __name__ == "__main__":
     #     print(current_room)
     #change_mode(current_mode,13)
     #change_volume(encoder_assignments[1], 'DOWN')
-    change_speaker()
-    change_speaker()
+    #change_speaker()
+    for i in range(1,8):
+        SPEAKER_SELECT = i
+        update_LEDs()
+    #change_speaker()
     try:
         print("System is running. Press Ctrl+C to exit.")
         while True:
