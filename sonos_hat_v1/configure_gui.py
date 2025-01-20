@@ -43,7 +43,7 @@ def initialize_config():
                 coordinator = grouped_speakers[speaker]["coordinator"]
 
                 if coordinator in room_encoders["Room Encoder 1"] or coordinator in room_encoders["Room Encoder 2"] or \
-                   coordinator in room_encoders["Room Encoder 3"]:
+                   coordinator in room_encoders["Room Encoder 3"] or coordinator in room_encoders["Room Encoder 4"]:
                     # Coordinator is already assigned, place this speaker in the same room
                     for room in room_encoders:
                         if coordinator in room_encoders[room]:
@@ -66,6 +66,15 @@ def initialize_config():
                             }
                             pending_speakers.remove(speaker)
                             break
+                    if len(pending_speakers) > 0 and room == 'Room Encoder 4': 
+                        speaker = pending_speakers[0]   
+                        room_encoders['Room Encoder 4'][speaker] = {
+                            "Speaker Encoder": 1,
+                            "Zone": "ANY",
+                            "IP": grouped_speakers[coordinator]["ip"]
+                        }
+                        pending_speakers.remove(speaker)
+                            
 
         # Place remaining speakers without their coordinators in Room Encoder 4
         for speaker in pending_speakers:

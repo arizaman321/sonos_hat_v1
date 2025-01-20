@@ -1,20 +1,20 @@
 {
     "speakers": {
+        "Roam 2": {
+            "ip": "192.168.10.74",
+            "coordinator": "Roam 2"
+        },
+        "Office Ray": {
+            "ip": "192.168.10.52",
+            "coordinator": "Main Bedroom Beam"
+        },
         "Main Bedroom Beam": {
             "ip": "192.168.10.51",
             "coordinator": "Main Bedroom Beam"
         },
         "Living Room 2": {
             "ip": "192.168.10.53",
-            "coordinator": "Beam Living Room"
-        },
-        "Office Ray": {
-            "ip": "192.168.10.52",
-            "coordinator": "Office Ray"
-        },
-        "Roam 2": {
-            "ip": "192.168.10.74",
-            "coordinator": "Main Bedroom Beam"
+            "coordinator": "Living Room 2"
         },
         "Beam Living Room": {
             "ip": "192.168.10.50",
@@ -23,25 +23,6 @@
     },
     "room_encoders": {
         "Room Encoder 1": {
-            "Main Bedroom Beam": {
-                "Speaker Encoder": 1,
-                "Zone": "CENTER",
-                "IP": "192.168.10.51"
-            },
-            "Roam 2": {
-                "Speaker Encoder": 2,
-                "Zone": "ANY",
-                "IP": "192.168.10.74"
-            }
-        },
-        "Room Encoder 2": {
-            "Office Ray": {
-                "Speaker Encoder": 1,
-                "Zone": "CENTER",
-                "IP": "192.168.10.52"
-            }
-        },
-        "Room Encoder 3": {
             "Beam Living Room": {
                 "Speaker Encoder": 1,
                 "Zone": "CENTER",
@@ -49,10 +30,30 @@
             },
             "Living Room 2": {
                 "Speaker Encoder": 2,
-                "Zone": "ANY",
+                "Zone": "LEFT",
                 "IP": "192.168.10.53"
             }
         },
-        "Room Encoder 4": {}
+        "Room Encoder 2": {
+            "Roam 2": {
+                "Speaker Encoder": 1,
+                "Zone": "CENTER",
+                "IP": "192.168.10.74"
+            }
+        },
+        "Room Encoder 3": {
+            "Main Bedroom Beam": {
+                "Speaker Encoder": 1,
+                "Zone": "CENTER",
+                "IP": "192.168.10.51"
+            }
+        },
+        "Room Encoder 4": {
+            "Office Ray": {
+                "Speaker Encoder": 1,
+                "Zone": "ANY",
+                "IP": "192.168.10.50"
+            }
+        }
     }
 }
