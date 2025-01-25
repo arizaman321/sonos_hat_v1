@@ -287,6 +287,7 @@ def button_callback(channel):
         
 def change_speaker():
     global SPEAKER_SELECT
+    prev_spk = SPEAKER_SELECT
     SPEAKER_SELECT += 1
     room_idx = ROOMS.index(current_room)
     config_room_name = list(config['room_encoders'].keys())[room_idx]
@@ -296,17 +297,21 @@ def change_speaker():
         SPEAKER_SELECT = 1
     update_encoders()
     update_LEDs()
+    print(f'Speaker changed from {prev_spk} to {SPEAKER_SELECT}')
     #print('herree')
 
 def change_room():
     global current_room, SPEAKER_SELECT
+    prev_room = current_room
     SPEAKER_SELECT = 1
     current_room = next(ROOMS_CYCLIC)
     update_encoders()
     update_LEDs()
+    print(f'Room changed from {prev_room} to {current_room}')
 
 def change_mode(channel):
     global current_mode, SPEAKER_SELECT
+    prev_mode = current_mode
     if channel == ALL_ROOMS_SW:
         current_mode = MODES[MODES.index('all_rooms_mode')]
     elif channel == SINGLE_SPK_SW:
@@ -319,6 +324,7 @@ def change_mode(channel):
     SPEAKER_SELECT = 1
     update_encoders()
     update_LEDs()
+    print(f'Mode changed from {prev_mode} to {current_mode}')
     #print('here')
     #return current_mode
 
@@ -431,7 +437,7 @@ STATIC_TURN_FUNCTIONS = {
 
 for button_pin in BUTTONS:
     GPIO.setup(button_pin,GPIO.IN,pull_up_down=GPIO.PUD_DOWN)
-    GPIO.add_event_detect(button_pin,GPIO.RISING,callback=partial(button_callback))
+    GPIO.add_event_detect(button_pin,GPIO.RISING,callback=partial(button_callback), bouncetime=200)
     # buttons_dict[button_pin] = Button(button_pin)
     # buttons_dict[button_pin].when_pressed = button_callback
     
@@ -471,11 +477,21 @@ if __name__ == "__main__":
     SPEAKER_SELECT = temp_spk   
     update_encoders()
     update_LEDs()
+
+    try:
+        print("System is running. Press Ctrl+C to exit.")
+        while True:
+            #print(current_mode)
+            pass
+    except KeyboardInterrupt:
+        print("Exiting...")
+    finally:
+        GPIO.cleanup()
     
-    # Handle SIGINT (Ctrl+C) or SIGTERM to exit gracefully
-    signal.signal(signal.SIGINT, handle_exit)
-    signal.signal(signal.SIGTERM, handle_exit)
-    print("Press the button or Ctrl+C to exit.")
+    # # Handle SIGINT (Ctrl+C) or SIGTERM to exit gracefully
+    # signal.signal(signal.SIGINT, handle_exit)
+    # signal.signal(signal.SIGTERM, handle_exit)
+    # print("Press the button or Ctrl+C to exit.")
     
-    # Instead of 'while True:', just pause and wait for signals (or GPIO events)
-    signal.pause()
+    # # Instead of 'while True:', just pause and wait for signals (or GPIO events)
+    # signal.pause()
