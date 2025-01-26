@@ -69,20 +69,23 @@ ENCODERS_CONFIG = [VOL_ENCODER1, BASS_ENCODER2, TREBLE_ENCODER3, EXTRA_ENCODER4]
 
 encoder_assignments = ['MISSING', 'MISSING', 'MISSING', 'MISSING']
 
-ROOMS = ["LIV", "KIT", "BED", "OFF"]
-ROOMS_CYCLIC = itertools.cycle(ROOMS)
+UPDATE_LEDS = 0
 
 ZONES = ["CENTER", "LEFT", "RIGHT", "ANY"]
 
 MODES = ["all_rooms_mode", "single_room_mode", "single_speaker_mode"]
+current_mode = MODES[2]
 
+VOL_STEP = 5
 
 SPEAKER_SELECT = 1
 
-for i in range(1): 
+ROOMS = ["LIV", "KIT", "BED", "OFF"]
+ROOMS_CYCLIC = itertools.cycle(ROOMS)
+for i in range(2): 
     current_room = next(ROOMS_CYCLIC) #ROOMS[1]
 # current_zone = ZONES[0]
-current_mode = MODES[2]
+
 
 # Load the configuration file
 
@@ -133,11 +136,9 @@ def assign_encoders_speakers():
                 encoder_speaker = encoder_speakers[list(
                     encoder_speakers.keys())[0]]
                 if encoder_idx >= 3:
-                    encoder_assignments[3][0] = [
-                        get_speaker_group(encoder_speaker['IP'])]
+                    encoder_assignments[3][0] = get_speaker_group(encoder_speaker['IP'])
                 else:
-                    encoder_assignments[encoder_idx][0] = [
-                        get_speaker_group(encoder_speaker['IP'])]
+                    encoder_assignments[encoder_idx][0] = get_speaker_group(encoder_speaker['IP'])
 
     elif current_mode == 'single_room_mode':
         for i in range(len(encoder_assignments)):
@@ -149,8 +150,7 @@ def assign_encoders_speakers():
             encoder_speaker = encoder_speakers[speaker]
             speaker_idx = ZONES.index(encoder_speaker['Zone'])
             if encoder_assignments[speaker_idx][0] == 'MISSING':
-                encoder_assignments[speaker_idx][0] = [
-                    get_speaker(encoder_speaker['IP'])]
+                encoder_assignments[speaker_idx][0] = get_speaker(encoder_speaker['IP'])
             else:
                 encoder_assignments[speaker_idx].append(
                     get_speaker(encoder_speaker['IP']))
@@ -167,12 +167,13 @@ def assign_encoders_speakers():
                 temp_speaker = get_speaker(encoder_speaker['IP'])
                 for i in range(len(['VOL', 'BASS', 'TREB'])):
                     if encoder_assignments[i][0] == 'MISSING':
-                        encoder_assignments[i][0] = [temp_speaker]
+                        encoder_assignments[i][0] = temp_speaker
                     else:
-                        encoder_assignments[i].append([temp_speaker])
+                        encoder_assignments[i].append(temp_speaker)
                 break
     
-    print(encoder_assignments)
+    print_encoders()
+    #print(encoder_assignments)
     # for i,encoder in enumerate(encoder_assignments):
     #     for item in encoder:
     #         for sub in item:
@@ -232,20 +233,36 @@ def get_speaker_group(speaker_ip):
         return 'MISSING'
 
 
-def change_volume(devices, direction="UP",single=False):
+def change_volume(devices, direction="UP",single=False, step = VOL_STEP):
     if single == True:
         devices = [SoCo(devices[0])]
-    for device in devices:
-        if device != 'MISSING':
+        
+    if current_mode == 'all_rooms_mode':
+        if devices[0] != 'MISSING':
             try:
+                device = devices[0]
                 if direction == 'UP':
-                    device.volume += 5
+                    device.set_relative_volume(step)
                 elif direction == 'DOWN':
-                    device.volume -= 5
+                    device.set_relative_volume(-step)
             except SoCoException as e:
                 print(f"An error occurred: {e}")
-                continue
-
+            except:
+                print(f'ERROR Changing {device} volume {direction}.')
+    else:
+        for device in devices:
+            if device != 'MISSING':
+                try:
+                    if direction == 'UP':
+                        device.volume += step
+                    elif direction == 'DOWN':
+                        device.volume -= step
+                except SoCoException as e:
+                    print(f"An error occurred: {e}")
+                    continue
+                except:
+                    print(f'ERROR Changing {device} volume {direction} by {step}.')
+    
 
 def change_bass(devices, direction="UP",single=False):
     if single == True:
@@ -260,6 +277,8 @@ def change_bass(devices, direction="UP",single=False):
             except SoCoException as e:
                 print(f"An error occurred: {e}")
                 continue
+            except:
+                print(f'ERROR Changing {device} bass {direction}.')
 
 
 def change_treble(devices, direction="UP"):
@@ -270,8 +289,11 @@ def change_treble(devices, direction="UP"):
                     device.treble += 1
                 elif direction == 'DOWN':
                     device.treble -= 1
-            except:
+            except SoCoException as e:
+                print(f"An error occurred: {e}")
                 continue
+            except:
+                print(f'ERROR Changing {device} bass {direction}.')
         # TODO add code that will search for missing device
 
 def button_callback(channel):
@@ -296,7 +318,7 @@ def change_speaker():
     if SPEAKER_SELECT > len(list(encoder_speakers.keys())) or SPEAKER_SELECT > 4:
         SPEAKER_SELECT = 1
     update_encoders()
-    update_LEDs()
+    if UPDATE_LEDS: update_LEDs()
     print(f'Speaker changed from {prev_spk} to {SPEAKER_SELECT}')
     #print('herree')
 
@@ -306,7 +328,7 @@ def change_room():
     SPEAKER_SELECT = 1
     current_room = next(ROOMS_CYCLIC)
     update_encoders()
-    update_LEDs()
+    if UPDATE_LEDS: update_LEDs()
     print(f'Room changed from {prev_room} to {current_room}')
 
 def change_mode(channel):
@@ -323,7 +345,7 @@ def change_mode(channel):
         current_mode = current_mode
     SPEAKER_SELECT = 1
     update_encoders()
-    update_LEDs()
+    if UPDATE_LEDS: update_LEDs()
     print(f'Mode changed from {prev_mode} to {current_mode}')
     #print('here')
     #return current_mode
@@ -427,6 +449,18 @@ def handle_exit(signum, frame):
     GPIO.cleanup()
     sys.exit(0)
 
+def print_encoders():
+
+    for i in range(0,4):
+        curr_enc = encoder_assignments[i]
+        if encoder_assignments[i] == ['MISSING']:
+            print(f'Encoder {i+1} : MISSING')
+        else:
+            if current_mode == 'all_rooms_mode':
+                print(f'Encoder {i+1} : {encoder_assignments[i][0].label}')
+            else:
+                print(f'Encoder {i+1} : {encoder_assignments[i][0].player_name}')
+
 STATIC_TURN_FUNCTIONS = {
     'all_rooms_mode': [change_volume, change_volume, change_volume, change_volume],
     'single_room_mode': [change_volume, change_volume, change_volume, change_volume],
@@ -464,8 +498,10 @@ if __name__ == "__main__":
     #     change_room()
     #     print(current_room)
     #change_mode(current_mode,13)
-    #change_volume(encoder_assignments[1], 'DOWN')
+    #change_volume(encoder_assignments[0], 'DOWN')
+
     #change_speaker()
+    #change_volume(encoder_assignments[0], 'DOWN')
     
     temp_mode = current_mode
     temp_room = current_room
@@ -476,7 +512,7 @@ if __name__ == "__main__":
     current_room = temp_room
     SPEAKER_SELECT = temp_spk   
     update_encoders()
-    update_LEDs()
+    if UPDATE_LEDS: update_LEDs()
 
     try:
         print("System is running. Press Ctrl+C to exit.")
