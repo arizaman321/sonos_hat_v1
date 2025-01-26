@@ -51,7 +51,7 @@ def initialize_config():
                             room_encoders[room][speaker] = {
                                 "Speaker Encoder": min(speaker_encoder, 4),
                                 "Zone": "ANY",
-                                "IP": grouped_speakers[speaker]["ip"]
+                                "IP": speakers[speaker]['ip']#grouped_speakers[speaker]["ip"]
                             }
                             pending_speakers.remove(speaker)
                             break
@@ -62,7 +62,7 @@ def initialize_config():
                             room_encoders[room][coordinator] = {
                                 "Speaker Encoder": 1,
                                 "Zone": "CENTER",
-                                "IP": grouped_speakers[coordinator]["ip"]
+                                "IP": speakers[speaker]['ip']#grouped_speakers[speaker]["ip"]
                             }
                             pending_speakers.remove(speaker)
                             break
@@ -71,7 +71,7 @@ def initialize_config():
                         room_encoders['Room Encoder 4'][speaker] = {
                             "Speaker Encoder": 1,
                             "Zone": "ANY",
-                            "IP": grouped_speakers[coordinator]["ip"]
+                            "IP": speakers[speaker]['ip']#grouped_speakers[speaker]["ip"]
                         }
                         pending_speakers.remove(speaker)
                             
@@ -81,7 +81,7 @@ def initialize_config():
             room_encoders["Room Encoder 4"][speaker] = {
                 "Speaker Encoder": len(room_encoders["Room Encoder 4"]) + 1,
                 "Zone": "ANY",
-                "IP": grouped_speakers[speaker]["ip"]
+                "IP": speakers[speaker]['ip']#grouped_speakers[speaker]["ip"]
             }
 
     # Sort speakers in each room encoder by their encoder number
