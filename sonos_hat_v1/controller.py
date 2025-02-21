@@ -8,7 +8,7 @@ from soco.exceptions import SoCoException
 from gpiozero import RotaryEncoder, Button
 import itertools
 from time import sleep
-import signal
+#import signal
 import sys
 #GPIO.setwarnings(False)
 
@@ -54,50 +54,6 @@ ROOM_LEDS = {
     "BED": 17, 
     "OFF": 27
 }
-
-##REV1
-# VOL_ENCODER1 = {
-#     'CLK': 4,
-#     'DT': 3,
-#     'SW': 2
-# }
-# BASS_ENCODER2 = {
-#     'CLK': 21,
-#     'DT': 20,
-#     'SW': 16
-# }
-# TREBLE_ENCODER3 = {
-#     'CLK': 22,
-#     'DT': 27,
-#     'SW': 17
-# }
-# EXTRA_ENCODER4 = {
-#     'CLK': 18,
-#     'DT': 15,
-#     'SW': 14
-# }
-
-# SPEAKER_SELECT_SW = 1
-# ROOM_SELECT_SW = 12
-# ALL_ROOMS_SW = 25
-# SINGLE_ROOM_SW = 8
-# SINGLE_SPK_SW = 7
-
-
-
-# MODE_LEDS = {
-#     "all_rooms_mode" : 10,
-#     "single_room_mode" : 9,
-#     "single_speaker_mode" : 11
-# }
-
-# ROOM_LEDS = {
-#     "LIV": 19, 
-#     "KIT": 26, 
-#     "BED": 23, 
-#     "OFF": 24
-# }
-
 
 
 BUTTONS_UP= [VOL_ENCODER1['SW'],BASS_ENCODER2['SW'],TREBLE_ENCODER3['SW'],EXTRA_ENCODER4['SW']]
@@ -230,20 +186,6 @@ def  assign_encoders_speakers():
                 break
     
     print_encoders()
-    #print(encoder_assignments)
-    # for i,encoder in enumerate(encoder_assignments):
-    #     for item in encoder:
-    #         for sub in item:
-    #             if item == 'MISSING':
-    #                 print(f'Encoder {i+1} - Player MISSING')
-    #             else:
-    #                 try:
-    #                     print(f'Encoder {i+1} - Player {sub.player_name}')
-    #                 except:
-    #                     try:
-    #                         print(f'Encoder {i+1} - Player {sub.label}')
-    #                     except:
-    #                         print(f'Encoder {i+1} - Player MISSING')
 
 def get_speaker(speaker_ip):
 
@@ -333,6 +275,7 @@ def change_bass(devices, direction="UP",single=False):
                     device.bass += 1
                 elif direction == 'DOWN':
                     device.bass -= 1
+                print(f'Changed {device} BASS {direction} by 1.')
             except SoCoException as e:
                 print(f"An error occurred: {e}")
                 continue
@@ -348,6 +291,7 @@ def change_treble(devices, direction="UP"):
                     device.treble += 1
                 elif direction == 'DOWN':
                     device.treble -= 1
+                print(f'Changed {device} TREBLE {direction} by 1.')
             except SoCoException as e:
                 print(f"An error occurred: {e}")
                 continue
@@ -358,6 +302,40 @@ def change_treble(devices, direction="UP"):
 def button_callback(channel):
     #print('hi')
     print('button pressed, ',channel)
+
+    def mute_spk(channel):
+        print(channel)
+        for idx,encoder in enumerate(ENCODERS_CONFIG):
+            if encoder['SW'] == channel:
+                if encoder_assignments[idx][0] != 'MISSING':
+                    current_state = encoder_assignments[idx][0].mute
+                    if current_state == True:
+                        encoder_assignments[idx][0].mute = False
+                    else:
+                        encoder_assignments[idx][0].mute = True
+                return
+    
+    def update_single_spk(channel):
+        for idx,encoder in enumerate(ENCODERS_CONFIG):
+            if encoder['SW'] == channel:
+                if encoder_assignments[idx][0] != 'MISSING':
+                    if idx == 0:
+                        current_state = encoder_assignments[idx][0].mute       
+                        if current_state == True:
+                            encoder_assignments[idx][0].mute = False
+                        else:
+                            encoder_assignments[idx][0].mute = True
+                    elif idx == 2:
+                        print(f'BASS before -> {encoder_assignments[idx][0].bass}')
+                        encoder_assignments[idx][0].bass = 0
+                        print(f'BASS after -> {encoder_assignments[idx][0].bass}')
+                    elif idx == 1:
+                        print(f'TREBLE before -> {encoder_assignments[idx][0].treble}')
+                        encoder_assignments[idx][0].treble = 0
+                        print(f'TREBLE after -> {encoder_assignments[idx][0].treble}')
+                        
+    # if channel == SPEAKER_SELECT_SW and current_mode == 'all_rooms_mode':
+    #     change_vol_increment()            
     if channel in [ALL_ROOMS_SW, SINGLE_SPK_SW, SINGLE_ROOM_SW]:
        # print(current_mode)
         change_mode(channel)
@@ -365,6 +343,21 @@ def button_callback(channel):
         change_room()
     elif channel == SPEAKER_SELECT_SW and current_mode in ['single_speaker_mode']:
         change_speaker()
+    elif channel in [ENCODERS_CONFIG[0]['SW'],ENCODERS_CONFIG[1]['SW'],ENCODERS_CONFIG[2]['SW'],ENCODERS_CONFIG[3]['SW']] and current_mode not in ['single_speaker_mode']:
+        mute_spk(channel)
+    elif channel in [ENCODERS_CONFIG[0]['SW'],ENCODERS_CONFIG[1]['SW'],ENCODERS_CONFIG[2]['SW']] and current_mode in ['single_speaker_mode']:
+        update_single_spk(channel)
+        
+# def change_vol_increment():
+#     #binary = bin(VOL_STEP)[2:]
+#     binary = f'{VOL_STEP:04b}'
+#     for idx,spk_pin in enumerate(SPK_LEDS):
+#         if binary[idx] == "1":
+#             GPIO.output(spk_pin,GPIO.HIGH)
+#         else:
+#             GPIO.output(spk_pin,GPIO.LOW)
+#     while True:
+#         pass
         
 def change_speaker():
     global SPEAKER_SELECT
@@ -417,11 +410,15 @@ def LED_on_off(dir = 'off'):
         if dir == 'on':
             GPIO.output(pin,GPIO.HIGH)
 
-def LED_flash(repeat = 1, time = .25):
+def LED_flash(repeat = 1, time = .5):
     for i in range(repeat):
         LED_on_off(dir = 'on')
         sleep(time)
         LED_on_off('off')
+    # while True:
+    #     LED_on_off(dir = 'on')
+    #     sleep(time)
+    #     LED_on_off('off')
     
 def LED_cycle(repeat=1,time = .15):
     for i in range(repeat):
@@ -527,7 +524,7 @@ def print_encoders():
 STATIC_TURN_FUNCTIONS = {
     'all_rooms_mode': [change_volume, change_volume, change_volume, change_volume],
     'single_room_mode': [change_volume, change_volume, change_volume, change_volume],
-    'single_speaker_mode': [change_volume, change_bass, change_treble, change_volume]
+    'single_speaker_mode': [change_volume, change_treble, change_bass, change_volume]##TODO why are these swapped
 }
 
 # buttons_dict = {}
@@ -535,8 +532,12 @@ STATIC_TURN_FUNCTIONS = {
 for button_pin in BUTTONS_UP:
     # GPIO.setup(button_pin,GPIO.IN,pull_up_down=GPIO.PUD_DOWN)
     # GPIO.add_event_detect(button_pin,GPIO.RISING,callback=partial(button_callback), bouncetime=200)
-    button = Button(button_pin)
-    button.when_pressed = button_callback
+    
+    #button = Button(button_pin)
+    #button.when_pressed = button_callback
+    
+    GPIO.setup(button_pin,GPIO.IN,pull_up_down=GPIO.PUD_UP)
+    GPIO.add_event_detect(button_pin,GPIO.RISING,callback=partial(button_callback), bouncetime=200)
 for button_pin in BUTTONS_DOWN:
     GPIO.setup(button_pin,GPIO.IN,pull_up_down=GPIO.PUD_DOWN)
     GPIO.add_event_detect(button_pin,GPIO.RISING,callback=partial(button_callback), bouncetime=200)
@@ -586,6 +587,7 @@ if __name__ == "__main__":
     #update_encoders()
     LED_flash()
     LED_cycle()
+    LED_flash()
     if UPDATE_LEDS: update_LEDs()
 
 
