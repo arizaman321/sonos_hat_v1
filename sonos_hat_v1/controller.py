@@ -139,6 +139,7 @@ def register_encoder_turn():
 
 def  assign_encoders_speakers():
     global encoder_assignments
+    
     if current_mode == 'all_rooms_mode':
         # print(config)
         for i in range(len(encoder_assignments)):
@@ -203,6 +204,8 @@ def get_speaker(speaker_ip):
 
     except SoCoException as e:
         print(f"An error occurred: {e}")
+        LED_flash(repeat=2,time=.1)
+        update_LEDs()
         return 'MISSING'
 
 
@@ -226,13 +229,19 @@ def get_speaker_group(speaker_ip):
 
     except SoCoException as e:
         print(f"An error occurred: {e}")
+        LED_flash(repeat=2,time=.1)
+        update_LEDs()
         return 'MISSING'
 
     except:
+        LED_flash(repeat=2,time=.1)
+        update_LEDs()
         return 'MISSING'
 
 
-def change_volume(devices, direction="UP",single=False, step = VOL_STEP):
+def change_volume(devices, direction="UP",single=False):
+    global VOL_STEP
+    step = VOL_STEP
     if single == True:
         devices = [SoCo(devices[0])]
         
@@ -247,8 +256,12 @@ def change_volume(devices, direction="UP",single=False, step = VOL_STEP):
                 print(f'Changed {device} volume {direction} by {step}.')
             except SoCoException as e:
                 print(f"An error occurred: {e}")
+                LED_flash(repeat=2,time=.1)
+                update_LEDs()
             except:
                 print(f'ERROR Changing {device} volume {direction} by {step}.')
+                LED_flash(repeat=2,time=.1)
+                update_LEDs()
     else:
         for device in devices:
             if device != 'MISSING':
@@ -260,9 +273,13 @@ def change_volume(devices, direction="UP",single=False, step = VOL_STEP):
                     print(f'Changed {device} volume {direction} by {step}.')
                 except SoCoException as e:
                     print(f"An error occurred: {e}")
+                    LED_flash(repeat=2,time=.1)
+                    update_LEDs()
                     continue
                 except:
                     print(f'ERROR Changing {device} volume {direction} by {step}.')
+                    LED_flash(repeat=2,time=.1)
+                    update_LEDs()
     
 
 def change_bass(devices, direction="UP",single=False):
@@ -278,9 +295,13 @@ def change_bass(devices, direction="UP",single=False):
                 print(f'Changed {device} BASS {direction} by 1.')
             except SoCoException as e:
                 print(f"An error occurred: {e}")
+                LED_flash(repeat=2,time=.1)
+                update_LEDs()
                 continue
             except:
                 print(f'ERROR Changing {device} bass {direction}.')
+                LED_flash(repeat=2,time=.1)
+                update_LEDs()
 
 
 def change_treble(devices, direction="UP"):
@@ -294,9 +315,13 @@ def change_treble(devices, direction="UP"):
                 print(f'Changed {device} TREBLE {direction} by 1.')
             except SoCoException as e:
                 print(f"An error occurred: {e}")
+                LED_flash(repeat=2,time=.1)
+                update_LEDs()
                 continue
             except:
                 print(f'ERROR Changing {device} bass {direction}.')
+                LED_flash(repeat=2,time=.1)
+                update_LEDs()
         # TODO add code that will search for missing device
 
 def button_callback(channel):
@@ -310,9 +335,14 @@ def button_callback(channel):
                 if encoder_assignments[idx][0] != 'MISSING':
                     current_state = encoder_assignments[idx][0].mute
                     if current_state == True:
+                        
                         encoder_assignments[idx][0].mute = False
+                        LED_flash(repeat=1,time=.1)
+                        update_LEDs()
                     else:
                         encoder_assignments[idx][0].mute = True
+                        LED_flash(repeat=2,time=.1)
+                        update_LEDs()
                 return
     
     def update_single_spk(channel):
@@ -323,20 +353,31 @@ def button_callback(channel):
                         current_state = encoder_assignments[idx][0].mute       
                         if current_state == True:
                             encoder_assignments[idx][0].mute = False
+                            LED_flash(repeat=1,time=.1)
+                            update_LEDs()
                         else:
                             encoder_assignments[idx][0].mute = True
+                            LED_flash(repeat=2,time=.1)
+                            update_LEDs()
                     elif idx == 2:
                         print(f'BASS before -> {encoder_assignments[idx][0].bass}')
                         encoder_assignments[idx][0].bass = 0
                         print(f'BASS after -> {encoder_assignments[idx][0].bass}')
+                        LED_flash(repeat=2,time=.1)
+                        update_LEDs()
                     elif idx == 1:
                         print(f'TREBLE before -> {encoder_assignments[idx][0].treble}')
                         encoder_assignments[idx][0].treble = 0
                         print(f'TREBLE after -> {encoder_assignments[idx][0].treble}')
+                        LED_flash(repeat=2,time=.1)
+                        update_LEDs()
+                    break
                         
-    # if channel == SPEAKER_SELECT_SW and current_mode == 'all_rooms_mode':
-    #     change_vol_increment()            
-    if channel in [ALL_ROOMS_SW, SINGLE_SPK_SW, SINGLE_ROOM_SW]:
+    if channel == SPEAKER_SELECT_SW and current_mode == 'all_rooms_mode':
+        change_vol_increment()      
+    if channel == ROOM_SELECT_SW and current_mode == 'all_rooms_mode':
+        update_LEDs()            
+    elif channel in [ALL_ROOMS_SW, SINGLE_SPK_SW, SINGLE_ROOM_SW]:
        # print(current_mode)
         change_mode(channel)
     elif channel == ROOM_SELECT_SW and current_mode not in ['all_rooms_mode']:
@@ -348,16 +389,19 @@ def button_callback(channel):
     elif channel in [ENCODERS_CONFIG[0]['SW'],ENCODERS_CONFIG[1]['SW'],ENCODERS_CONFIG[2]['SW']] and current_mode in ['single_speaker_mode']:
         update_single_spk(channel)
         
-# def change_vol_increment():
-#     #binary = bin(VOL_STEP)[2:]
-#     binary = f'{VOL_STEP:04b}'
-#     for idx,spk_pin in enumerate(SPK_LEDS):
-#         if binary[idx] == "1":
-#             GPIO.output(spk_pin,GPIO.HIGH)
-#         else:
-#             GPIO.output(spk_pin,GPIO.LOW)
-#     while True:
-#         pass
+def change_vol_increment():
+    global VOL_STEP
+    
+    VOL_STEP += 1
+    if VOL_STEP > 15:
+        VOL_STEP = 1  # Reset to 1 instead of 0 to always have an active LED state
+
+    binary = f'{VOL_STEP:04b}'  # Convert VOL_STEP to 4-bit binary
+
+    for idx, spk_pin in enumerate(SPK_LEDS):
+        GPIO.output(spk_pin, GPIO.HIGH if binary[idx] == "1" else GPIO.LOW)
+
+    print(f'VOL_STEP updated to {VOL_STEP}, LED binary: {binary}')
         
 def change_speaker():
     global SPEAKER_SELECT
@@ -415,6 +459,7 @@ def LED_flash(repeat = 1, time = .5):
         LED_on_off(dir = 'on')
         sleep(time)
         LED_on_off('off')
+        sleep(time)
     # while True:
     #     LED_on_off(dir = 'on')
     #     sleep(time)
@@ -543,23 +588,20 @@ for button_pin in BUTTONS_DOWN:
     GPIO.add_event_detect(button_pin,GPIO.RISING,callback=partial(button_callback), bouncetime=200)
 
 
-
+for LED in MODE_LEDS:
+    pin = MODE_LEDS[LED]
+    GPIO.setup(pin, GPIO.OUT)
+    GPIO.output(pin,GPIO.LOW)
+for LED in ROOM_LEDS:
+    pin = ROOM_LEDS[LED]
+    GPIO.setup(pin, GPIO.OUT)
+    GPIO.output(pin,GPIO.LOW)
+for LED_pin in SPK_LEDS:
+    GPIO.setup(LED_pin, GPIO.OUT)
+    GPIO.output(LED_pin,GPIO.LOW)  
+        
 if __name__ == "__main__":
 
-    for LED in MODE_LEDS:
-        pin = MODE_LEDS[LED]
-        GPIO.setup(pin, GPIO.OUT)
-        GPIO.output(pin,GPIO.LOW)
-    for LED in ROOM_LEDS:
-        pin = ROOM_LEDS[LED]
-        GPIO.setup(pin, GPIO.OUT)
-        GPIO.output(pin,GPIO.LOW)
-    for LED_pin in SPK_LEDS:
-        GPIO.setup(LED_pin, GPIO.OUT)
-        GPIO.output(LED_pin,GPIO.LOW)   
-    
-
-    
     config_path = "sonos_config.json"
     config = load_config(config_path)
 
