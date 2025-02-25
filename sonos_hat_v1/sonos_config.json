@@ -1,9 +1,49 @@
 {
-    "speakers": {},
+    "speakers": {
+        "Office Ray": {
+            "ip": "192.168.10.52",
+            "coordinator": "Office Ray"
+        },
+        "Beam Living Room": {
+            "ip": "192.168.10.50",
+            "coordinator": "Beam Living Room"
+        },
+        "Main Bedroom Beam": {
+            "ip": "192.168.10.51",
+            "coordinator": "Main Bedroom Beam"
+        },
+        "Living Room 2": {
+            "ip": "192.168.10.53",
+            "coordinator": "Beam Living Room"
+        }
+    },
     "room_encoders": {
-        "Room Encoder 1": {},
-        "Room Encoder 2": {},
-        "Room Encoder 3": {},
+        "Room Encoder 1": {
+            "Office Ray": {
+                "Speaker Encoder": 1,
+                "Zone": "CENTER",
+                "IP": "192.168.10.52"
+            }
+        },
+        "Room Encoder 2": {
+            "Beam Living Room": {
+                "Speaker Encoder": 1,
+                "Zone": "CENTER",
+                "IP": "192.168.10.50"
+            },
+            "Living Room 2": {
+                "Speaker Encoder": 2,
+                "Zone": "ANY",
+                "IP": "192.168.10.53"
+            }
+        },
+        "Room Encoder 3": {
+            "Main Bedroom Beam": {
+                "Speaker Encoder": 1,
+                "Zone": "CENTER",
+                "IP": "192.168.10.51"
+            }
+        },
         "Room Encoder 4": {}
     }
 }

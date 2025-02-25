@@ -1,0 +1,2 @@
+('/home/glorified2247/Python_Programs/sonos_hat_v1/sonos_hat_v1/build/controller/PYZ-00.pyz',
+ [])

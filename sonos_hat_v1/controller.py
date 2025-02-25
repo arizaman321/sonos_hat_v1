@@ -11,7 +11,11 @@ from time import sleep
 #import signal
 import sys
 #GPIO.setwarnings(False)
+import os
+#import pkgutil
 
+#modules = [module.name for module in pkgutil.iter_modules()]
+#print("Detected Modules:", modules)
 #REV2
 VOL_ENCODER1 = {
     'CLK': 9,
@@ -603,6 +607,15 @@ for LED_pin in SPK_LEDS:
 if __name__ == "__main__":
 
     config_path = "sonos_config.json"
+    # BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Get script directory
+    # config_path = os.path.join(BASE_DIR, "sonos_config.json")
+    if getattr(sys, 'frozen', False):
+        BASE_DIR = sys._MEIPASS  # Extracted temp directory
+    else:
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Normal script location
+
+    # Load the config file
+    config_path = os.path.join(BASE_DIR, "sonos_config.json")
     config = load_config(config_path)
 
     encoders = initialize_encoders()
@@ -654,3 +667,6 @@ if __name__ == "__main__":
     
     # # Instead of 'while True:', just pause and wait for signals (or GPIO events)
     # signal.pause()
+
+
+ #pyinstaller --onefile --clean   --collect-submodules gpiozero   --collect-submodules RPi.GPIO   --collect-submodules pigpio   --collect-submodules lgpio   --hidden-import=RPi.GPIO   --hidden-import=gpiozero.pins.rpigpio   --hidden-import=gpiozero.pins.pigpio   --hidden-import=gpiozero.pins.lgpio   --add-data "sonos_config.json:."   --debug all controller.py
